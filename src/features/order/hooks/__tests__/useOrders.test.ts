@@ -4,6 +4,7 @@ import { useOrders } from "../useOrders";
 import { apiFetch, ApiError } from "@/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
+import { queryKeys } from "@/lib/queryKeys";
 
 vi.mock("@/lib/api", () => ({
     apiFetch: vi.fn(),
@@ -28,8 +29,7 @@ const createTestQueryClient = () => new QueryClient({
     },
 });
 
-export function createWrapper() {
-    const testQueryClient = createTestQueryClient();
+export function createWrapper(testQueryClient = createTestQueryClient()) {
     return function Wrapper({ children }: { children: React.ReactNode }) {
         return React.createElement(QueryClientProvider, { client: testQueryClient }, children);
     };
@@ -38,6 +38,35 @@ export function createWrapper() {
 describe("useOrders", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it("invalidates offer data after creating or cancelling an order", async () => {
+        const queryClient = createTestQueryClient();
+        const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+        mockedApiFetch
+            .mockResolvedValueOnce({ orderId: "order-1" })
+            .mockResolvedValueOnce({ orderId: "order-1", orderStatus: "cancelled" });
+
+        const { result } = renderHook(() => useOrders(), { wrapper: createWrapper(queryClient) });
+
+        await act(async () => {
+            await result.current.createOrder({
+                offerId: "offer-1",
+                buyerId: "buyer-1",
+                sellerId: "seller-1",
+                assetAmount: "2",
+                fiatAmount: "10",
+                sellerAddress: "seller-address",
+                buyerAddress: "buyer-address",
+                assetCode: "XLM",
+            });
+            await result.current.cancelOrder("order-1");
+        });
+
+        expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.offers.all });
+        expect(invalidateQueries.mock.calls.filter(
+            ([filters]) => filters.queryKey === queryKeys.offers.all,
+        )).toHaveLength(2);
     });
 
     describe("cancelOrder", () => {

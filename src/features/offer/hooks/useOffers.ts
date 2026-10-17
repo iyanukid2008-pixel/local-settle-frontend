@@ -38,7 +38,8 @@ export function useOffers(filters?: Record<string, string>) {
     const getOffer = async (offerId: string) => {
         return await queryClient.fetchQuery({
             queryKey: queryKeys.offers.detail(offerId),
-            queryFn: () => apiFetch<Offer>(`/offers/${offerId}`)
+            queryFn: () => apiFetch<Offer>(`/offers/${offerId}`),
+            staleTime: 0,
         });
     };
 

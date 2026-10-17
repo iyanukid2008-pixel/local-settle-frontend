@@ -5,6 +5,8 @@ import { Offer } from "@/features/offer/models/offer";
 import { Users } from "@/features/user/models/users";
 import { useUser } from "@/features/user/presentation/context/UserContext";
 import { useOrders } from "@/features/order/hooks/useOrders";
+import { useOffers } from "@/features/offer/hooks/useOffers";
+import { hasOfferCapacity } from "@/features/offer/utils/remaining-capacity";
 import { useEscrows } from "@/features/escrow/hooks/useEscrows";
 import { isSignatureCancelled } from "@/features/wallet/application/wallet.service";
 import { useSignatureCancellation } from "@/features/wallet/hooks/useSignatureCancellation";
@@ -30,6 +32,7 @@ interface OrderCreateResponse {
 export function ConfirmOrderModal({ offer, creator, onClose }: ConfirmOrderModalProps) {
     const { currentUser } = useUser();
     const { createOrder } = useOrders();
+    const { getOffer } = useOffers();
     const { syncEscrow } = useEscrows();
     const router = useRouter();
     const { notify } = useNotifications();
@@ -270,6 +273,12 @@ export function ConfirmOrderModal({ offer, creator, onClose }: ConfirmOrderModal
             const fiatAmountVal = isBuyOperation ? inputNum : inputNum * priceNum;
             const assetAmountVal = isBuyOperation ? inputNum / priceNum : inputNum;
 
+            // Re-read authoritative offer state immediately before creating an order.
+            const latestOffer = await getOffer(offer.offerId);
+            if (!latestOffer || !hasOfferCapacity(latestOffer, assetAmountVal)) {
+                throw new Error("This offer no longer has enough remaining capacity. Refresh the market and adjust your amount.");
+            }
+
             const sellerAddress = isBuyOperation ? creator?.publicKey : currentUser?.publicKey;
             const buyerAddress = isBuyOperation ? currentUser?.publicKey : creator?.publicKey;
 
@@ -277,7 +286,7 @@ export function ConfirmOrderModal({ offer, creator, onClose }: ConfirmOrderModal
             // then persists Order + EscrowOnChain atomically.
             // If escrow deployment fails, no DB record is created.
             const orderData: OrderCreateResponse = await createOrder({
-                offerId: offer.offerId,
+                offerId: latestOffer.offerId,
                 buyerId: isBuyOperation ? currentUser.userId : offer.creatorId,
                 sellerId: isBuyOperation ? offer.creatorId : currentUser.userId,
                 fiatAmount: fiatAmountVal.toString(),

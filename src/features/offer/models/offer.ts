@@ -10,6 +10,8 @@ export interface Offer {
     maxAmount: string,
     status: string,
     executed?: boolean,
+    /** Server-calculated amount still available after open orders reserve capacity. */
+    remainingCapacity?: string | number | null,
     payment_methods?: PaymentMethodOption[],
     paymentMethods?: PaymentMethodOption[]
 }

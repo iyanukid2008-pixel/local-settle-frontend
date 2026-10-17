@@ -10,10 +10,10 @@ import { useOfferFilters } from "@/features/offer/hooks/useOfferFilters";
 import { useUsers } from "@/features/user/hooks/useUsers";
 import { useUser } from "@/features/user/presentation/context/UserContext";
 import { KycBanner } from "@/app/components/KycBanner";
-import { useWalletBalance } from "@/features/wallet/presentation/hooks/useWalletBalance";
 import { Offer } from "@/features/offer/models/offer";
 import { OfferFilters } from "@/features/offer/components/OfferFilters";
 import { buildOfferQuery } from "@/features/offer/utils/build-offer-query";
+import { isOfferAvailable } from "@/features/offer/utils/remaining-capacity";
 import { PaymentMethodOption } from "@/features/paymentMethod/models/paymentMethod";
 import { getRovingFocusIndex } from "@/utils/keyboardNavigation";
 
@@ -30,27 +30,6 @@ function resolvePaymentMethodName(pm: PaymentMethodOption): string {
         pm.type ||
         ""
     );
-}
-
-// ----------------------------------------------------------
-// MerchantBalance sub-component
-// ----------------------------------------------------------
-function MerchantBalance({ publicKey, assetCode }: { publicKey?: string; assetCode?: string }) {
-    const { balance, balances, isLoading } = useWalletBalance(publicKey || null);
-
-    if (isLoading) return <span className="animate-pulse">...</span>;
-    if (!publicKey) return <span>0.00</span>;
-
-    const normalizedAssetCode = assetCode === "XLM" || assetCode === "native" ? "native" : assetCode;
-
-    if (normalizedAssetCode === "native") {
-        return <span>{balance || "0.00"}</span>;
-    }
-
-    const asset = balances.find(b => b.asset_code === normalizedAssetCode);
-    if (!asset) return <span>0.00</span>;
-
-    return <span>{parseFloat(asset.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
 }
 
 // ----------------------------------------------------------
@@ -184,7 +163,7 @@ function TradeDashboardInner() {
     // paymentMethod, minAmount, maxAmount, and sort are applied here client-side
     // because the backend does not yet support those query params.
     const visibleOffers = useMemo(() => {
-        let result = offers.filter(o => !o.executed);
+        let result = offers.filter(isOfferAvailable);
 
         // --- paymentMethod filter ---
         if (filters.paymentMethod) {
@@ -375,8 +354,12 @@ function TradeDashboardInner() {
                                         {/* Capacity */}
                                         <div className="flex gap-12">
                                             <div className="flex flex-col gap-1.5">
-                                                <span className="text-[#9BABB7] text-[10px] font-bold tracking-widest uppercase">Available</span>
-                                                <span className="text-white font-bold text-sm"><MerchantBalance publicKey={userFound[offer.creatorId]?.publicKey} assetCode={offer.assetCode} /> {offer.assetCode || "BTC"}</span>
+                                                <span className="text-[#9BABB7] text-[10px] font-bold tracking-widest uppercase">Remaining capacity</span>
+                                                <span className="text-white font-bold text-sm">
+                                                    {offer.remainingCapacity == null
+                                                        ? "Checked before trade"
+                                                        : `${Number(offer.remainingCapacity).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${offer.assetCode || "BTC"}`}
+                                                </span>
                                             </div>
                                             <div className="flex flex-col gap-1.5">
                                                 <span className="text-[#9BABB7] text-[10px] font-bold tracking-widest uppercase">Limits</span>
